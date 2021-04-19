@@ -17,13 +17,13 @@ function wavelength_from_voltage(voltage)
 end
 
 
-""" Converts an mrc image to a tif power spectrum using IMOD.
+""" Calculate power spectrum using IMOD.
 
-Returns path of temporary file.
+Returns a temporary path to the image in tif format.
 """
-function mrc_to_tif_spectrum(mrcfile)
+function run_clip(input_file)
     spectrum_tif = tempname()
-    imod_cmd = `clip spectrum -f TIF $mrcfile $spectrum_tif`
+    imod_cmd = `clip spectrum -f TIF $input_file $spectrum_tif`
     @time run(imod_cmd)
     return spectrum_tif
 end
@@ -238,7 +238,7 @@ end
 
 """ Maximizes f! to find ctf parameters.
 
-`mrc_image`: path to mrc.
+`input_image`: path to mrc.
 `pixelsize`: pixel size in Angstroms.
 `voltage`: accelerating voltage in kV.
 `Cs`: spherical abberation in millimeters.
@@ -248,16 +248,16 @@ end
 `search_phase`: boolean to also search for phase shift.
 """
 function find_ctf(
-    mrc_image,
+    input_image,
     pixelsize,
     voltage,
     Cs,
     min_resolution,
     max_resolution,
     amplitude_contrast,
-    search_phase,
+    search_phase::Bool,
 )
-    tif_spectrum = mrc_to_tif_spectrum(mrc_image)
+    tif_spectrum = run_clip(input_image)
     spectrum = load_clip_spectrum(tif_spectrum)
 
     λ = wavelength_from_voltage(voltage)

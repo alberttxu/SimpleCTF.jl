@@ -19,7 +19,7 @@ function parse_commandline()
         "--min_resolution"
             help = "Lower resolution for search"
             arg_type = Float64
-            default = 25.0
+            default = 25.
         "--max_resolution"
             help = "Upper resolution for search"
             arg_type = Float64
@@ -51,12 +51,12 @@ function main()
     max_resolution = parsed_args["max_resolution"]
     amplitude_contrast = parsed_args["amplitude_contrast"]
     search_phase = parsed_args["search_phase"]
-    mrc_images = parsed_args["mrc_images"]
+    input_images = parsed_args["input_images"]
 
-    for mrc_image in mrc_images
-        println(mrc_image)
+    for input_image in input_images
+        println(input_image)
         @time reference_spectrum, estimated_spectrum = find_ctf(
-            mrc_image,
+            input_image,
             pixelsize,
             voltage,
             Cs,
