@@ -1,8 +1,9 @@
 module SimpleCTF
 
-using ArgParse
 include("utils.jl")
+export find_ctf
 
+using ArgParse
 
 function parse_commandline()
     s = ArgParseSettings()
@@ -10,12 +11,15 @@ function parse_commandline()
         "--pixelsize"
             help = "Pixel size in Angstroms"
             arg_type = Float64
+            required = true
         "--voltage"
             help = "Accelerating voltage in kV"
             arg_type = Float64
+            required = true
         "--Cs"
             help = "Spherical abberation in millimeters"
             arg_type = Float64
+            required = true
         "--min_resolution"
             help = "Lower resolution for search"
             arg_type = Float64
@@ -29,7 +33,7 @@ function parse_commandline()
             arg_type = Float64
             default = 0.07
         "--search_phase"
-            help = "Search for phase shift"
+            help = "Additionally search for phase shift"
             action = :store_true
         "images"
             nargs = '*'
@@ -51,7 +55,7 @@ function main()
     max_resolution = parsed_args["max_resolution"]
     amplitude_contrast = parsed_args["amplitude_contrast"]
     search_phase = parsed_args["search_phase"]
-    input_images = parsed_args["input_images"]
+    input_images = parsed_args["images"]
 
     for input_image in input_images
         println(input_image)
@@ -71,7 +75,6 @@ function main()
     end
 end
 
-
-export find_ctf
+#main()
 
 end

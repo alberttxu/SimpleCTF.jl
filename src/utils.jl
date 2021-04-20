@@ -236,7 +236,7 @@ function f!(
 end
 
 
-""" Maximizes f! to find ctf parameters.
+""" Maximizes the cross correlation to determine ctf parameters.
 
 `input_image`: path to mrc.
 `pixelsize`: pixel size in Angstroms.
