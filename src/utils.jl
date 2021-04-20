@@ -1,5 +1,5 @@
 using LinearAlgebra
-using FFTW, Images, ImageFiltering, Interpolations, NLopt
+using FFTW, Images, TiffImages, ImageFiltering, Interpolations, NLopt
 
 
 struct Range2D{T}
