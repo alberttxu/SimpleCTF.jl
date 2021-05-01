@@ -1,5 +1,5 @@
 using LinearAlgebra
-using FFTW, Images, TiffImages, ImageFiltering, Interpolations, NLopt
+using FFTW, Images, ImageIO, TiffImages, ImageFiltering, Interpolations, NLopt
 
 
 struct Range2D{T}
@@ -17,26 +17,14 @@ function wavelength_from_voltage(voltage)
 end
 
 
-""" Calculate power spectrum using IMOD.
-
-Returns a temporary path to the image in tif format.
-"""
-function run_clip(input_file)
-    spectrum_tif = tempname()
-    imod_cmd = `clip spectrum -f TIF $input_file $spectrum_tif`
-    @time run(imod_cmd)
-    return spectrum_tif
-end
-
-
-""" Reads in a power spectrum output by IMOD's clip command.
-
-Reduces shape to an rfft.
-"""
-function load_clip_spectrum(tif_file)
-    spectrum = load(tif_file)
-    spectrum = fftshift(spectrum)[1:length(rfftfreq(size(spectrum)[2])), :]
-    return spectrum
+""" Return a log averaged-spectrum using Bartlett's method. """
+function get_spectrum(img, N::Integer = 1024, stride = 1024)
+    m, n = size(img)
+    A = abs.(rfft(@view img[1:N, 1:N]))
+    for j in stride+1:stride:n-N, i in stride+1:stride:m-N
+        A .+= abs.(rfft(@view img[i:i+1023, j:j+1023]))
+    end
+    return log.(A)
 end
 
 
@@ -47,11 +35,13 @@ return a 1-D profile in the horizontal direction.
 width: number of rows to average
 σ: std. deviation of gaussian smoothing
 """
-function profile1D(spectrum::AbstractArray{<:Real}, σ = 2, width::Int = 15)
+function profile1D(spectrum::AbstractArray{<:Real}; σ = 2, width::Integer = 15)
     j_max = div(size(spectrum)[2], 2)
     horizontal_strip = @view spectrum[1:width, 1:j_max]
     profile = vec(sum(horizontal_strip, dims = 1)) / width
-    imfilter!(profile, profile, KernelFactors.IIRGaussian((σ,)))
+    if σ > 0
+        imfilter!(profile, profile, KernelFactors.IIRGaussian((σ,)))
+    end
     return profile
 end
 
@@ -127,7 +117,6 @@ function preprocess_spectrum(
     min_resolution,
     max_resolution,
 )
-    println("preprocessing")
     N = size(spectrum)[2]
     low_res_idx = round(Int, N * pixelsize / min_resolution)
     high_res_idx = round(Int, N * pixelsize / max_resolution)
@@ -164,7 +153,7 @@ function preprocess_spectrum(
     reference_spectrum = subtracted_spectrum .* binary_mask
     damped_mask = create_damped_mask(x, y, low_res_idx, high_res_idx, envelope)
 
-    return (reference_spectrum, z_estimate, damped_mask, kx, ky)
+    return (reference_spectrum, z_estimate, damped_mask, kx, ky, envelope, low_res_idx)
 end
 
 
@@ -211,6 +200,7 @@ function ctf!(
     return nothing
 end
 
+
 """ Returns the cross correlation between a reference power spectrum and an estimate from ctf!
 
 Same arguments as ctf! with an additional `reference_spectrum` image.
@@ -236,6 +226,20 @@ function f!(
 end
 
 
+struct SearchResult
+    z1::Float64
+    z2::Float64
+    θ::Float64
+    ϕ::Float64
+    correlation::Float64
+end
+
+
+function Base.show(io::IO, x::SearchResult)
+    print(io, "$(x.z1),$(x.z2),$(x.θ),$(x.ϕ),$(x.correlation)")
+end
+
+
 """ Maximizes the cross correlation to determine ctf parameters.
 
 `input_image`: path to mrc.
@@ -245,7 +249,7 @@ end
 `min_resolution`: min resolution cutoff.
 `max_resolution`: max resolution cutoff.
 `amplitude_contrast`: fraction between 0 and 1.
-`search_phase`: boolean to also search for phase shift.
+`do_phase_search`: boolean to also search for phase shift.
 """
 function find_ctf(
     input_image,
@@ -255,17 +259,17 @@ function find_ctf(
     min_resolution,
     max_resolution,
     amplitude_contrast,
-    search_phase::Bool,
+    do_phase_search::Bool,
 )
-    tif_spectrum = run_clip(input_image)
-    spectrum = load_clip_spectrum(tif_spectrum)
+    img = real.(load(input_image))
+    spectrum = get_spectrum(img)
 
     λ = wavelength_from_voltage(voltage)
-    @time reference_spectrum, z_estimate, damped_mask, kx, ky =
+    reference_spectrum, z_estimate, damped_mask, kx, ky =
         preprocess_spectrum(spectrum, Cs, λ, pixelsize, min_resolution, max_resolution)
     A = similar(reference_spectrum, Float64)
 
-    if search_phase
+    if do_phase_search
         opt = Opt(:LN_COBYLA, 4)
         opt.lower_bounds = [0.5, 0.5, -90, 0.0]
         opt.upper_bounds = [5.0, 5.0, 90, 180.0]
@@ -309,16 +313,13 @@ function find_ctf(
     opt.xtol_rel = 1e-4
     inequality_constraint!(opt, (p, grad) -> p[2] - p[1])
 
-    println("searching")
-    @time (minf, minx, ret) = optimize(opt, p0)
+    (correlation, params, ret) = optimize(opt, p0)
     numevals = opt.numevals # the number of function evaluations
-    println("z1: $(round(minx[1], digits=4)) μm")
-    println("z2: $(round(minx[2], digits=4)) μm")
-    println("θ: $(round(minx[3], digits=2)) degrees")
-    if search_phase
-        println("ϕ: $(round(minx[4], digits=2)) degrees")
+    if do_phase_search
+        search_result = SearchResult(round.((params[1], params[2], params[3], params[4], correlation), digits=4)...)
+    else
+        search_result = SearchResult(round.((params[1], params[2], params[3], 0, correlation), digits=4)...)
     end
-    println("correlation: $(round(minf, digits=4))")
 
-    return reference_spectrum, A
+    return reference_spectrum, A, search_result
 end

@@ -1,9 +1,11 @@
 module SimpleCTF
 
-include("utils.jl")
 export find_ctf
+include("utils.jl")
 
 using ArgParse
+using LinearAlgebra: BLAS
+using Base.Threads
 
 function parse_commandline()
     s = ArgParseSettings()
@@ -32,13 +34,16 @@ function parse_commandline()
             help = "Fraction of amplitude contrast"
             arg_type = Float64
             default = 0.07
-        "--search_phase"
+        "--do_phase_search"
             help = "Additionally search for phase shift"
             action = :store_true
+        "--csv"
+            help = "csv to store results"
+            default = "simplectf_results.csv"
         "images"
             nargs = '*'
             default = []
-            help = "Aligned images for ctf estimation. Can be any format recognized by IMOD."
+            help = "Aligned images for ctf estimation. Must be tif format."
             required = true
     end
     return parse_args(s)
@@ -54,12 +59,17 @@ function main()
     min_resolution = parsed_args["min_resolution"]
     max_resolution = parsed_args["max_resolution"]
     amplitude_contrast = parsed_args["amplitude_contrast"]
-    search_phase = parsed_args["search_phase"]
+    do_phase_search = parsed_args["do_phase_search"]
+    out_csv = parsed_args["csv"]
     input_images = parsed_args["images"]
 
-    for input_image in input_images
-        println(input_image)
-        @time reference_spectrum, estimated_spectrum = find_ctf(
+    BLAS.set_num_threads(1)
+    FFTW.set_num_threads(1)
+
+    results = []
+    @time @threads for input_image in input_images
+        println("processing $input_image")
+        reference_spectrum, estimated_spectrum, search_result = find_ctf(
             input_image,
             pixelsize,
             voltage,
@@ -67,12 +77,21 @@ function main()
             min_resolution,
             max_resolution,
             amplitude_contrast,
-            search_phase,
+            do_phase_search,
         )
-        println()
+        push!(results, (input_image, search_result))
         #diagnostic = [reference_spectrum[end:-1:1, :]; estimated_spectrum]
         #diagnostic ./= maximum(diagnostic)
     end
+
+    f = open(out_csv, "w")
+    write(f, "filename,defocus1,defocus2,astigmatism angle,phase shift,correlation\n")
+    for (input_image, search_result) in results
+        write(f, "$input_image,$search_result\n")
+    end
+    close(f)
+    println("results written to $out_csv")
+
 end
 
 end

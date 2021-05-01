@@ -3,8 +3,8 @@
 SimpleCTF.jl is a power spectrum estimation program for transmission electron microscope images (CTF estimation).
 
 ## Prerequisites
-- Install [IMOD](https://bio3d.colorado.edu/imod/)
-- Install [Julia](https://julialang.org/)
+- Julia 1.6
+- Input files must be tif format
 
 ## Install
 
@@ -12,70 +12,37 @@ SimpleCTF.jl is a power spectrum estimation program for transmission electron mi
 
 Create a command line alias
 
-`$ alias simplectf="julia <(echo 'import SimpleCTF; SimpleCTF.main()')"`
+```
+$ alias simplectf="julia <(echo 'import SimpleCTF; SimpleCTF.main()')"
+$ export JULIA_NUM_THREADS=8
+```
 
 
 ## Usage
 ```
-$ simplectf --pixelsize 0.87 --voltage 200 --Cs 2.7 input.mrc
-input.mrc
-clip: Taking power spectrum of 1 slices...
-  0.471685 seconds (36 allocations: 1.406 KiB)
-preprocessing
-  4.885600 seconds (12.44 M allocations: 699.103 MiB, 5.73% gc time, 99.04% compilation time)
-searching
-  1.367068 seconds (3.55 M allocations: 236.946 MiB, 6.93% gc time, 93.05% compilation time)
-z1: 1.0678 μm
-z2: 1.0678 μm
-θ: -0.46 degrees
-correlation: 0.764
- 10.449962 seconds (24.43 M allocations: 1.400 GiB, 5.20% gc time, 58.48% compilation time)
+$ simplectf --pixelsize 0.87 --voltage 200 --Cs 2.7 input.tif
+processing input.tif
+ 14.544366 seconds (31.21 M allocations: 1.999 GiB, 7.29% gc time, 0.14% compilation time)
+results written to simplectf_results.csv
+
+$ cat simplectf_results.csv
+filename,defocus1,defocus2,astigmatism angle,phase shift,correlation
+input.tif,1.0671,1.0671,-2.4644,0.0,0.2242
 ```
 
 For the first input file Julia has to JIT compile the code. Successive files are faster if more are given.
 
-```
-$ simplectf --pixelsize 0.87 --voltage 200 --Cs 2.7 input.mrc input.mrc
-input.mrc
-clip: Taking power spectrum of 1 slices...
-  0.468964 seconds (36 allocations: 1.406 KiB)
-preprocessing
-  4.976644 seconds (12.44 M allocations: 699.103 MiB, 5.44% gc time, 99.53% compilation time)
-searching
-  1.384385 seconds (3.55 M allocations: 236.946 MiB, 7.24% gc time, 92.78% compilation time)
-z1: 1.0678 μm
-z2: 1.0678 μm
-θ: -0.46 degrees
-correlation: 0.764
- 10.605652 seconds (24.43 M allocations: 1.400 GiB, 5.10% gc time, 58.81% compilation time)
-
-input.mrc
-clip: Taking power spectrum of 1 slices...
-  0.494393 seconds (36 allocations: 1.406 KiB)
-preprocessing
-  0.025121 seconds (262.60 k allocations: 11.093 MiB)
-searching
-  0.118567 seconds (1.54 k allocations: 43.981 MiB, 36.68% gc time)
-z1: 1.0678 μm
-z2: 1.0678 μm
-θ: -0.46 degrees
-correlation: 0.764
-  0.645198 seconds (264.80 k allocations: 59.013 MiB, 6.74% gc time)
-```
-
-
 ## Options
 ```
-$ simplectf -h
 usage: 11 --pixelsize PIXELSIZE --voltage VOLTAGE --Cs CS
           [--min_resolution MIN_RESOLUTION]
           [--max_resolution MAX_RESOLUTION]
-          [--amplitude_contrast AMPLITUDE_CONTRAST] [--search_phase]
-          [-h] images...
+          [--amplitude_contrast AMPLITUDE_CONTRAST]
+          [--do_phase_search] [--csv CSV] [-h] images...
 
 positional arguments:
-  images                Aligned images for ctf estimation. Can be any
-                        format recognized by IMOD.
+  images                Aligned images for ctf estimation. Must be tif
+                        format.
 
 optional arguments:
   --pixelsize PIXELSIZE
@@ -92,6 +59,8 @@ optional arguments:
   --amplitude_contrast AMPLITUDE_CONTRAST
                         Fraction of amplitude contrast (type: Float64,
                         default: 0.07)
-  --search_phase        Additionally search for phase shift
+  --do_phase_search     Additionally search for phase shift
+  --csv CSV             csv to store results (default:
+                        "simplectf_results.csv")
   -h, --help            show this help message and exit
 ```
