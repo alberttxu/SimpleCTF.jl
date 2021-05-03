@@ -20,9 +20,10 @@ end
 """ Return a log averaged-spectrum using Bartlett's method. """
 function get_spectrum(img, N::Integer = 1024, stride = 1024)
     m, n = size(img)
-    A = abs.(rfft(@view img[1:N, 1:N]))
+    P = plan_rfft(@view img[1:N, 1:N])
+    A = abs.(P * (@view img[1:N, 1:N]))
     for j in stride+1:stride:n-N, i in stride+1:stride:m-N
-        A .+= abs.(rfft(@view img[i:i+1023, j:j+1023]))
+        A .+= abs.(P * (@view img[i:i+1023, j:j+1023]))
     end
     return log.(A)
 end
@@ -242,7 +243,7 @@ end
 
 """ Maximizes the cross correlation to determine ctf parameters.
 
-`input_image`: path to mrc.
+`input_image`: path to image file.
 `pixelsize`: pixel size in Angstroms.
 `voltage`: accelerating voltage in kV.
 `Cs`: spherical abberation in millimeters.
